@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include "terminal.h"
+#include "tokenizer.h"
 
 #define MAX_INPUT_LENGTH 1024
 
@@ -12,6 +13,10 @@ int get_input(char *input, size_t *cursor_pos, size_t *input_length){
     int ch;
     printf("%s", prompt);
     printf("\033[5 q");
+
+    memset(input, 0, MAX_INPUT_LENGTH);
+    *cursor_pos = 0;
+    *input_length = 0;
 
     while(1){
         ch = getchar();
