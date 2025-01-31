@@ -21,12 +21,15 @@ char *expand_variable(const char *token){
             return strdup("$");
         }
 
+        size_t i = 0;
         size_t start = 1;
         size_t end = len;
         if(token[1] == '{'){
             start++;
             end--;
         }
+
+        // TODO: need to expand variables inside the variable
 
         char *var = strndup(token + start, end - start);
         if(!var) return strdup("");
@@ -80,103 +83,98 @@ int tokenize(char *input, Token **tokens){
 
         if(input[i] == '\'' || input[i] == '"'){
             char quote = input[i];
+            int start = i;
             i++;
-            size_t start = i;
 
-            while(input[i] != '\0' && input[i] != quote){
+            while(input[i] != quote && input[i] != '\0'){
+                if(input[i] == '\\' && input[i + 1] == quote){
+                    i += 2;
+                    continue;
+                }
                 i++;
             }
 
-            if(input[i] == '\0'){
-                fprintf(stderr, "unterminated quote\n");
-                return -1;
-            }
-
-            if(quote == '"'){
-                // TODO: expand variables inside double quotes
-
-            }
-
-            size_t end = i;
-            char *value = strndup(input + start, end - start);
-            (*tokens)[num_tokens].value = value;
             (*tokens)[num_tokens].type = TOKEN_ARGUMENT;
+            (*tokens)[num_tokens].value = strndup(input + start + 1, i - start - 1);
             num_tokens++;
             i++;
             continue;
-        } else if(input[i] == '|'){
-            if(expect_command){
-                fprintf(stderr, "unexpected pipe\n");
-                return -1;
+        }
+
+        char *expanded_value = NULL;
+        size_t total_len = 0;
+        while(input[i] == '$'){
+            int start = i;
+            i++;
+
+            char *var_name = NULL;
+
+            if(input[i] == '{'){
+                int var_start = ++i;
+                while(input[i] != '}' && input[i] != '\0'){
+                    i++;
+                }
+
+                if(input[i] == '}'){
+                    var_name = strndup(input + var_start, i - var_start);
+                    i++;
+                }
+            } else {
+                int var_start = i;
+                while(isalnum(input[i]) || input[i] == '_'){
+                    i++;
+                }
+
+                var_name = strndup(input + var_start, i - var_start);
             }
 
-            (*tokens)[num_tokens].value = strdup("|");
+            /*while(isalnum(input[i]) || input[i] == '_'){
+                i++;
+            }
+
+            char *var_name = strndup(input + start + 1, i - start - 1);*/
+
+            if(var_name){
+                char *var_value = getenv(var_name);
+                if(var_value){
+                    size_t value_len = strlen(var_value);
+                    expanded_value = realloc(expanded_value, total_len + value_len + 1);
+                    strcpy(expanded_value + total_len, var_value);
+                    total_len += value_len;
+                }
+
+                free(var_name);
+            }
+        }
+
+        if(expanded_value){
+            (*tokens)[num_tokens].type = TOKEN_ARGUMENT;
+            (*tokens)[num_tokens].value = expanded_value;
+            num_tokens++;
+            continue;
+        }
+
+        if(input[i] == '|'){
             (*tokens)[num_tokens].type = TOKEN_PIPE;
+            (*tokens)[num_tokens].value = strndup(input + i, 1);
             num_tokens++;
             i++;
             expect_command = true;
             continue;
-        } else if(input[i] == '$'){
-            bool expect_braces = false;
-            size_t start = i;
-            i++;
-
-            if(input[i] == '{'){
-                i++; // skip '{'
-                start++;
-                expect_braces = true;
-            }
-
-            while(isalnum(input[i]) || input[i] == '_'){
-                i++;
-            }
-
-            if(input[i] == '}'){
-                if(!expect_braces){
-                    fprintf(stderr, "unexpected '}'\n");
-                    return -1;
-                }
-
-                i++;
-                expect_braces = false;
-            }
-
-            if(expect_braces){
-                fprintf(stderr, "unterminated variable\n");
-                return -1;
-            }
-
-            char *var = strndup(input + start, i - start);
-            if(strlen(var) == 0)
-                return -1;
-
-            char *expanded = expand_variable(var);
-            free(var);
-
-            if(strlen(expanded) == 0)
-                continue;
-
-            (*tokens)[num_tokens].value = expanded;
-            (*tokens)[num_tokens].type = TOKEN_ARGUMENT;
-            num_tokens++;
-            continue;
         } else {
-            size_t start = i;
+            int start = i;
             while(input[i] != '\0' && !isspace(input[i]) && input[i] != '|'){
+                if(input[i] == '\\' && (input[i + 1] == '\'' || input[i + 1] == '"')){
+                    i += 2;
+                    continue;
+                }
                 i++;
             }
-            size_t end = i;
 
-            if(expect_command){
-                (*tokens)[num_tokens].value = strndup(input + start, end - start);
-                (*tokens)[num_tokens].type = TOKEN_COMMAND;
-                num_tokens++;
-                expect_command = false;
-            } else {
-                (*tokens)[num_tokens].value = strndup(input + start, end - start);
-                (*tokens)[num_tokens].type = TOKEN_ARGUMENT;
-                num_tokens++;
-            }
+            (*tokens)[num_tokens].type = expect_command ? TOKEN_COMMAND : TOKEN_ARGUMENT;
+            (*tokens)[num_tokens].value = strndup(input + start, i - start);
+            num_tokens++;
+            expect_command = false;
         }
 
         i++;
@@ -192,6 +190,7 @@ void print_token(TokenType type){
         case TOKEN_SINGLE_QUOTE_STRING: printf("SINGLE_QUOTE_STRING"); break;
         case TOKEN_DOUBLE_QUOTE_STRING: printf("DOUBLE_QUOTE_STRING"); break;
         case TOKEN_PIPE: printf("PIPE"); break;
+        case TOKEN_VARIABLE: printf("VARIABLE"); break;
         default: printf("UNKNOWN"); break;
     }
 }
