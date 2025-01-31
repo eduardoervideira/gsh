@@ -38,7 +38,6 @@ int main(int argc, char **argv){
 
                 if(num_tokens > 0){
                     execute(tokens, num_tokens);
-
                     /*for (int i = 0; i < num_tokens; i++){
                         printf("  [%s] -> ", tokens[i].value);
                         print_token(tokens[i].type);

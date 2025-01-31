@@ -68,6 +68,14 @@ int execute(Token *tokens, int num_tokens){
     }
 
     // TODO: todo
+    printf("num_commands: %d\n", num_commands);
+    for (int i = 0; i < num_commands; i++) {
+        printf("command %d: ", i);
+        for (int j = 0; j < commands[i].num_tokens; j++) {
+            printf("[%s] ", commands[i].tokens[j].value);
+        }
+        printf("\n");
+    }
     
     return 0;
 }
